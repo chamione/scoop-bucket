@@ -84,7 +84,8 @@ function Get-RaycastOfficialInfo {
         $pageContent = Get-WebContent -Uri $OfficialPageUrl -TimeoutInSec $TimeoutSec
     }
 
-    $versionMatch = [regex]::Match($pageContent, "v(?<version>\d+\.\d+\.\d+\.\d+)\s*(Beta)?", [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    # Accept both 3-part and 4-part versions in case Raycast changes display format.
+    $versionMatch = [regex]::Match($pageContent, "v(?<version>\d+\.\d+\.\d+(?:\.\d+)?)\s*(Beta)?", [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
     if (-not $versionMatch.Success) {
         throw "Unable to detect Raycast version from official page."
     }
@@ -141,7 +142,8 @@ try {
     $manifest.hash = $hash
 
     $updatedManifestJson = $manifest | ConvertTo-Json -Depth 10
-    Set-Content -Path $ManifestPath -Value $updatedManifestJson -Encoding utf8
+    $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+    [System.IO.File]::WriteAllText($ManifestPath, $updatedManifestJson, $utf8NoBom)
 
     Write-Host "Updated $ManifestPath to version $officialVersion."
     Write-WorkflowOutput -Name "updated" -Value "true"
