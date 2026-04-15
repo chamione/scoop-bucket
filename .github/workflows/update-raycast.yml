@@ -1,0 +1,48 @@
+name: Update Raycast Manifest
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 2 * * *"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-raycast:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Update Raycast manifest from official source
+        id: update
+        shell: pwsh
+        run: ./scripts/update-raycast.ps1
+
+      - name: Validate manifest JSON
+        shell: pwsh
+        run: |
+          $manifest = Get-Content -Path "bucket/raycast.json" -Raw | ConvertFrom-Json
+          foreach ($required in @("version", "description", "homepage", "url", "hash", "installer")) {
+            if (-not $manifest.PSObject.Properties.Name.Contains($required)) {
+              throw "Missing required field: $required"
+            }
+          }
+
+      - name: Create pull request
+        if: steps.update.outputs.updated == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore(bucket): update raycast to v${{ steps.update.outputs.version }}"
+          title: "chore(bucket): update raycast to v${{ steps.update.outputs.version }}"
+          body: |
+            Automated Raycast manifest update.
+
+            - Source: official Raycast Windows page
+            - Updated fields: version, url, hash
+          branch: "automation/update-raycast-v${{ steps.update.outputs.version }}"
+          add-paths: |
+            bucket/raycast.json
