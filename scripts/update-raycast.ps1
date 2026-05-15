@@ -127,13 +127,9 @@ if (-not (Test-Path -Path $ManifestPath)) {
 $officialVersion = Get-RaycastOfficialVersion
 
 $manifest = Get-Content -Path $ManifestPath -Raw | ConvertFrom-Json
-if ($manifest.version -eq $officialVersion) {
-    Write-Host "Raycast manifest is already up to date at version $officialVersion."
-    Write-WorkflowOutput -Name "updated" -Value "false"
-    Write-WorkflowOutput -Name "version" -Value $officialVersion
-    exit 0
-}
 
+# Always re-download and re-hash so we can also self-heal stale url/hash even
+# when version has not bumped (e.g. when a previous run wrote a fallback URL).
 $tempFile = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ("raycast-installer-{0}.exe" -f $officialVersion)
 $resolvedUrl = $InstallerEntryUrl
 
@@ -161,8 +157,20 @@ try {
     $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
     [System.IO.File]::WriteAllText($ManifestPath, $updatedManifestJson, $utf8NoBom)
 
-    Write-Host "Updated $ManifestPath to version $officialVersion."
-    Write-WorkflowOutput -Name "updated" -Value "true"
+    Write-Host "Wrote $ManifestPath (version=$officialVersion, url=$resolvedUrl, hash=$hash)."
+
+    # Decide "updated" purely from working-tree diff so the PR step only fires
+    # when the manifest actually changed (versus the committed file in HEAD).
+    $gitOutput = & git status --porcelain -- $ManifestPath 2>$null
+    $hasChanges = -not [string]::IsNullOrWhiteSpace(($gitOutput | Out-String))
+    if ($hasChanges) {
+        Write-Host "Manifest changed compared to HEAD; will request PR."
+        Write-WorkflowOutput -Name "updated" -Value "true"
+    }
+    else {
+        Write-Host "Manifest unchanged compared to HEAD; no PR needed."
+        Write-WorkflowOutput -Name "updated" -Value "false"
+    }
     Write-WorkflowOutput -Name "version" -Value $officialVersion
 }
 finally {
