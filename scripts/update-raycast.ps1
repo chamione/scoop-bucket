@@ -1,7 +1,8 @@
 param(
     [string]$ManifestPath = "bucket/raycast.json",
-    [int]$TimeoutSec = 30,
-    [string]$OfficialPageUrl = "https://www.raycast.com/download-windows",
+    [int]$TimeoutSec = 60,
+    [string]$OfficialPageUrl = "https://www.raycast.com/windows",
+    [string]$InstallerEntryUrl = "https://ray.so/download-windows",
     [string]$MockOfficialPagePath,
     [string]$MockInstallerPath
 )
@@ -23,6 +24,25 @@ function Write-WorkflowOutput {
     }
 }
 
+# Browser-like UA is required: raycast.com serves a 404 error shell to unknown
+# clients, which would defeat any regex extraction below.
+$script:BrowserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+function New-HttpClient {
+    param(
+        [Parameter(Mandatory = $true)]
+        [int]$TimeoutInSec
+    )
+
+    $handler = [System.Net.Http.HttpClientHandler]::new()
+    $handler.AllowAutoRedirect = $true
+    $handler.AutomaticDecompression = [System.Net.DecompressionMethods]::GZip -bor [System.Net.DecompressionMethods]::Deflate
+    $client = [System.Net.Http.HttpClient]::new($handler)
+    $client.Timeout = [TimeSpan]::FromSeconds($TimeoutInSec)
+    $client.DefaultRequestHeaders.UserAgent.ParseAdd($script:BrowserUserAgent)
+    return [PSCustomObject]@{ Client = $client; Handler = $handler }
+}
+
 function Get-WebContent {
     param(
         [Parameter(Mandatory = $true)]
@@ -31,18 +51,13 @@ function Get-WebContent {
         [int]$TimeoutInSec
     )
 
-    $handler = [System.Net.Http.HttpClientHandler]::new()
-    $handler.AutomaticDecompression = [System.Net.DecompressionMethods]::GZip -bor [System.Net.DecompressionMethods]::Deflate
-    $client = [System.Net.Http.HttpClient]::new($handler)
-    $client.Timeout = [TimeSpan]::FromSeconds($TimeoutInSec)
-    $client.DefaultRequestHeaders.UserAgent.ParseAdd("raycast-bucket-updater/1.0")
-
+    $pair = New-HttpClient -TimeoutInSec $TimeoutInSec
     try {
-        return $client.GetStringAsync($Uri).GetAwaiter().GetResult()
+        return $pair.Client.GetStringAsync($Uri).GetAwaiter().GetResult()
     }
     finally {
-        $client.Dispose()
-        $handler.Dispose()
+        $pair.Client.Dispose()
+        $pair.Handler.Dispose()
     }
 }
 
@@ -56,23 +71,29 @@ function Save-FileWithTimeout {
         [int]$TimeoutInSec
     )
 
-    $handler = [System.Net.Http.HttpClientHandler]::new()
-    $handler.AutomaticDecompression = [System.Net.DecompressionMethods]::GZip -bor [System.Net.DecompressionMethods]::Deflate
-    $client = [System.Net.Http.HttpClient]::new($handler)
-    $client.Timeout = [TimeSpan]::FromSeconds($TimeoutInSec)
-    $client.DefaultRequestHeaders.UserAgent.ParseAdd("raycast-bucket-updater/1.0")
-
+    # Returns the FINAL resolved URL after redirects, so the manifest can pin a
+    # versioned/immutable URL that matches the bytes we just hashed.
+    $pair = New-HttpClient -TimeoutInSec $TimeoutInSec
     try {
-        $bytes = $client.GetByteArrayAsync($Uri).GetAwaiter().GetResult()
-        [System.IO.File]::WriteAllBytes($OutFile, $bytes)
+        $response = $pair.Client.GetAsync($Uri, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
+        try {
+            $response.EnsureSuccessStatusCode() | Out-Null
+            $resolvedUri = $response.RequestMessage.RequestUri.AbsoluteUri
+            $bytes = $response.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult()
+            [System.IO.File]::WriteAllBytes($OutFile, $bytes)
+            return $resolvedUri
+        }
+        finally {
+            $response.Dispose()
+        }
     }
     finally {
-        $client.Dispose()
-        $handler.Dispose()
+        $pair.Client.Dispose()
+        $pair.Handler.Dispose()
     }
 }
 
-function Get-RaycastOfficialInfo {
+function Get-RaycastOfficialVersion {
     $pageContent = $null
     if ($MockOfficialPagePath) {
         if (-not (Test-Path -Path $MockOfficialPagePath)) {
@@ -84,36 +105,29 @@ function Get-RaycastOfficialInfo {
         $pageContent = Get-WebContent -Uri $OfficialPageUrl -TimeoutInSec $TimeoutSec
     }
 
+    # Detect the Next.js 404 shell so we fail loudly instead of silently using a
+    # stale fallback (the bug that made historical hashes wrong).
+    if ($pageContent -match '__next_error__' -or $pageContent -match 'NEXT_REDIRECT') {
+        throw "Official Raycast page returned an error shell. Page URL may have changed: $OfficialPageUrl"
+    }
+
     # Accept both 3-part and 4-part versions in case Raycast changes display format.
     $versionMatch = [regex]::Match($pageContent, "v(?<version>\d+\.\d+\.\d+(?:\.\d+)?)\s*(Beta)?", [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
     if (-not $versionMatch.Success) {
         throw "Unable to detect Raycast version from official page."
     }
 
-    $urlMatch = [regex]::Match($pageContent, "https://get\.microsoft\.com/installer/download/[A-Z0-9]+(?:#/[A-Za-z0-9\-_\.]+)?", [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
-    $installerUrl = "https://get.microsoft.com/installer/download/9PFXXSHC64H3#/RaycastInstaller.exe"
-    if ($urlMatch.Success) {
-        $installerUrl = $urlMatch.Value
-    }
-
-    return @{
-        Version = $versionMatch.Groups["version"].Value
-        InstallerUrl = $installerUrl
-    }
+    return $versionMatch.Groups["version"].Value
 }
 
 if (-not (Test-Path -Path $ManifestPath)) {
     throw "Manifest file not found: $ManifestPath"
 }
 
-$officialInfo = Get-RaycastOfficialInfo
-$officialVersion = $officialInfo.Version
-$installerUrl = $officialInfo.InstallerUrl
+$officialVersion = Get-RaycastOfficialVersion
 
 $manifest = Get-Content -Path $ManifestPath -Raw | ConvertFrom-Json
-$needsUpdate = ($manifest.version -ne $officialVersion) -or ($manifest.url -ne $installerUrl)
-
-if (-not $needsUpdate) {
+if ($manifest.version -eq $officialVersion) {
     Write-Host "Raycast manifest is already up to date at version $officialVersion."
     Write-WorkflowOutput -Name "updated" -Value "false"
     Write-WorkflowOutput -Name "version" -Value $officialVersion
@@ -121,6 +135,7 @@ if (-not $needsUpdate) {
 }
 
 $tempFile = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ("raycast-installer-{0}.exe" -f $officialVersion)
+$resolvedUrl = $InstallerEntryUrl
 
 try {
     if ($MockInstallerPath) {
@@ -131,14 +146,15 @@ try {
         Write-Host "Using mock installer from: $MockInstallerPath"
     }
     else {
-        Write-Host "Downloading installer from: $installerUrl"
-        Save-FileWithTimeout -Uri $installerUrl -OutFile $tempFile -TimeoutInSec $TimeoutSec
+        Write-Host "Downloading installer from: $InstallerEntryUrl"
+        $resolvedUrl = Save-FileWithTimeout -Uri $InstallerEntryUrl -OutFile $tempFile -TimeoutInSec $TimeoutSec
+        Write-Host "Resolved installer URL: $resolvedUrl"
     }
 
     $hash = (Get-FileHash -Algorithm SHA256 -Path $tempFile).Hash.ToLowerInvariant()
 
     $manifest.version = $officialVersion
-    $manifest.url = $installerUrl
+    $manifest.url = $resolvedUrl
     $manifest.hash = $hash
 
     $updatedManifestJson = $manifest | ConvertTo-Json -Depth 10
