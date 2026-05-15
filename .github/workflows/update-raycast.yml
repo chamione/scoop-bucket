@@ -43,6 +43,7 @@ jobs:
 
             - Source: official Raycast Windows page
             - Updated fields: version, url, hash
-          branch: "automation/update-raycast-v${{ steps.update.outputs.version }}"
+          branch: "automation/update-raycast"
+          delete-branch: true
           add-paths: |
             bucket/raycast.json
