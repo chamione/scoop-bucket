@@ -15,7 +15,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Update Raycast manifest from official source
         id: update
@@ -34,7 +34,7 @@ jobs:
 
       - name: Create pull request
         if: steps.update.outputs.updated == 'true'
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v8
         with:
           commit-message: "chore(bucket): update raycast to v${{ steps.update.outputs.version }}"
           title: "chore(bucket): update raycast to v${{ steps.update.outputs.version }}"
