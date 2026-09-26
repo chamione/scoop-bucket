@@ -1,9 +1,9 @@
 {
-  "version": "2.0.3.0",
+  "version": "2.5.2.0",
   "description": "Raycast for Windows",
   "homepage": "https://www.raycast.com/download-windows",
   "url": "https://get.microsoft.com/installer/download/9PFXXSHC64H3",
-  "hash": "b285782a865a1bf36e1a301e2b38248982297706af5fb4c952741ed496091548",
+  "hash": "ff655805c49d9f490af26794c9c005fade25d54888a4cfd555980aec5ffaf732",
   "installer": {
     "file": "RaycastInstaller.exe",
     "args": [
