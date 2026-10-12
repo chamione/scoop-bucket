@@ -1,0 +1,55 @@
+name: Update Herdr Manifest
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "57 3 * * *"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-herdr:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Update Herdr manifest from official release
+        id: update
+        shell: pwsh
+        run: ./scripts/update-herdr.ps1
+
+      - name: Validate manifest JSON
+        shell: pwsh
+        run: |
+          $manifest = Get-Content -Path "bucket/herdr.json" -Raw | ConvertFrom-Json
+          foreach ($required in @("version", "description", "homepage", "license", "url", "hash", "bin")) {
+            if (-not $manifest.PSObject.Properties.Name.Contains($required)) {
+              throw "Missing required field: $required"
+            }
+          }
+          if ($manifest.url -notlike "https://github.com/herdrdev/herdr/releases/download/*/herdr-windows-x86_64.zip") {
+            throw "Manifest URL is not an official Herdr Windows release asset."
+          }
+          if ($manifest.hash -notmatch "^[0-9a-f]{64}$") {
+            throw "Invalid SHA-256 hash."
+          }
+
+      - name: Create pull request
+        if: steps.update.outputs.updated == 'true'
+        uses: peter-evans/create-pull-request@v8
+        with:
+          commit-message: "chore(bucket): update herdr to v${{ steps.update.outputs.version }}"
+          title: "chore(bucket): update herdr to v${{ steps.update.outputs.version }}"
+          body: |
+            Automated Herdr manifest update.
+
+            - Source: official herdrdev/herdr GitHub release
+            - Updated fields: version, URL, hash
+          branch: "automation/update-herdr"
+          delete-branch: true
+          add-paths: |
+            bucket/herdr.json
