@@ -1,0 +1,58 @@
+name: Update Clawd on Desk Manifest
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "37 3 * * *"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-clawd-on-desk:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Update Clawd on Desk manifest from official release
+        id: update
+        shell: pwsh
+        run: ./scripts/update-clawd-on-desk.ps1
+
+      - name: Validate manifest JSON
+        shell: pwsh
+        run: |
+          $manifest = Get-Content -Path "bucket/clawd-on-desk.json" -Raw | ConvertFrom-Json
+          foreach ($required in @("version", "description", "homepage", "license", "architecture", "installer")) {
+            if (-not $manifest.PSObject.Properties.Name.Contains($required)) {
+              throw "Missing required field: $required"
+            }
+          }
+          foreach ($architecture in @("64bit", "arm64")) {
+            $entry = $manifest.architecture.$architecture
+            if (-not $entry.url -or $entry.url -notlike "https://github.com/rullerzhou-afk/clawd-on-desk/releases/download/*") {
+              throw "Invalid $architecture URL."
+            }
+            if ($entry.hash -notmatch "^[0-9a-f]{64}$") {
+              throw "Invalid $architecture SHA-256 hash."
+            }
+          }
+
+      - name: Create pull request
+        if: steps.update.outputs.updated == 'true'
+        uses: peter-evans/create-pull-request@v8
+        with:
+          commit-message: "chore(bucket): update clawd-on-desk to v${{ steps.update.outputs.version }}"
+          title: "chore(bucket): update clawd-on-desk to v${{ steps.update.outputs.version }}"
+          body: |
+            Automated Clawd on Desk manifest update.
+
+            - Source: official rullerzhou-afk/clawd-on-desk GitHub release
+            - Updated fields: version, architecture URLs, hashes
+          branch: "automation/update-clawd-on-desk"
+          delete-branch: true
+          add-paths: |
+            bucket/clawd-on-desk.json
