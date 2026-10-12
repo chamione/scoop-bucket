@@ -1,0 +1,52 @@
+name: Update Rebased Manifest
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * *"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-rebased:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Update Rebased manifest from official release
+        id: update
+        shell: pwsh
+        run: ./scripts/update-rebased.ps1
+
+      - name: Validate manifest JSON
+        shell: pwsh
+        run: |
+          $manifest = Get-Content -Path "bucket/rebased.json" -Raw | ConvertFrom-Json
+          foreach ($required in @("version", "description", "homepage", "url", "hash", "installer")) {
+            if (-not $manifest.PSObject.Properties.Name.Contains($required)) {
+              throw "Missing required field: $required"
+            }
+          }
+          if ($manifest.url -notlike "https://github.com/DetachHead/rebased/releases/download/*/rebased.exe") {
+            throw "Manifest URL is not an official Rebased release asset."
+          }
+
+      - name: Create pull request
+        if: steps.update.outputs.updated == 'true'
+        uses: peter-evans/create-pull-request@v8
+        with:
+          commit-message: "chore(bucket): update rebased to v${{ steps.update.outputs.version }}"
+          title: "chore(bucket): update rebased to v${{ steps.update.outputs.version }}"
+          body: |
+            Automated Rebased manifest update.
+
+            - Source: official DetachHead/rebased GitHub release
+            - Updated fields: version, url, hash
+          branch: "automation/update-rebased"
+          delete-branch: true
+          add-paths: |
+            bucket/rebased.json
