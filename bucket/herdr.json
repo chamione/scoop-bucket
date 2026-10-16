@@ -1,10 +1,10 @@
 {
-  "version": "0.9.3",
+  "version": "0.9.5",
   "description": "A terminal-native multiplexer for running AI coding agents",
   "homepage": "https://herdr.dev",
   "license": "Apache-2.0",
-  "url": "https://github.com/herdrdev/herdr/releases/download/v0.9.3/herdr-windows-x86_64.zip",
-  "hash": "c75b1fa49f7a3ba4b8b11789912a6147e4214a3b6fd3556d0f80076c8887d795",
+  "url": "https://github.com/herdrdev/herdr/releases/download/v0.9.5/herdr-windows-x86_64.zip",
+  "hash": "d2c6c9c971c43a0bfdde8c692a9a1a7a45c3e4807cd01ae45662b4734fac1cbf",
   "bin": "herdr.exe",
   "checkver": {
     "github": "herdrdev/herdr"
