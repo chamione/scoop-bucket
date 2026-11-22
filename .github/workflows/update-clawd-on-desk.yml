@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   update-clawd-on-desk:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
@@ -19,27 +19,9 @@ jobs:
 
       - name: Update Clawd on Desk manifest from official release
         id: update
-        shell: pwsh
-        run: ./scripts/update-clawd-on-desk.ps1
-
-      - name: Validate manifest JSON
-        shell: pwsh
-        run: |
-          $manifest = Get-Content -Path "bucket/clawd-on-desk.json" -Raw | ConvertFrom-Json
-          foreach ($required in @("version", "description", "homepage", "license", "architecture", "installer")) {
-            if (-not $manifest.PSObject.Properties.Name.Contains($required)) {
-              throw "Missing required field: $required"
-            }
-          }
-          foreach ($architecture in @("64bit", "arm64")) {
-            $entry = $manifest.architecture.$architecture
-            if (-not $entry.url -or $entry.url -notlike "https://github.com/rullerzhou-afk/clawd-on-desk/releases/download/*") {
-              throw "Invalid $architecture URL."
-            }
-            if ($entry.hash -notmatch "^[0-9a-f]{64}$") {
-              throw "Invalid $architecture SHA-256 hash."
-            }
-          }
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/update-clawd-on-desk.sh
 
       - name: Create pull request
         if: steps.update.outputs.updated == 'true'
