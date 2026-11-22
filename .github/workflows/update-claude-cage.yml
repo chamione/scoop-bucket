@@ -1,0 +1,28 @@
+name: Update Claude Cage Manifest
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * *"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Update from official release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/update-claude-cage.sh
+      - uses: peter-evans/create-pull-request@v8
+        with:
+          branch: automation/update-claude-cage
+          title: "chore(bucket): update claude-cage"
+          commit-message: "chore(bucket): update claude-cage"
+          body: Update the Windows x64 manifest from the official Claude Cage release.
+          add-paths: bucket/claude-cage.json
+          delete-branch: true

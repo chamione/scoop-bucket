@@ -1,0 +1,27 @@
+{
+  "version": "0.1.8",
+  "description": "A desktop workbench for running Claude in an isolated virtual machine",
+  "homepage": "https://github.com/Lee-xeo/Claude-Cage",
+  "license": "MIT",
+  "architecture": {
+    "64bit": {
+      "url": "https://github.com/Lee-xeo/Claude-Cage/releases/download/v0.1.8/Cage-0.1.8-windows-amd64-setup.exe",
+      "hash": "4b069b1e82e5d0ed0fd5a718222428679cf392b2b5f3e7e1a8efddc30634f0c4"
+    }
+  },
+  "installer": {
+    "args": ["/S", "/D=$dir\\app"]
+  },
+  "uninstaller": {
+    "script": [
+      "$target = Join-Path $dir 'app'",
+      "$runner = Join-Path $dir 'uninstall-cage.exe'",
+      "Copy-Item -LiteralPath \"$target\\Uninstall.exe\" -Destination $runner -Force",
+      "$process = Start-Process -FilePath $runner -ArgumentList \"/S _?=$target\" -Wait -PassThru",
+      "if ($process.ExitCode -ne 0) { throw \"Cage uninstall failed with exit code $($process.ExitCode)\" }"
+    ]
+  },
+  "checkver": {
+    "github": "https://github.com/Lee-xeo/Claude-Cage"
+  }
+}
