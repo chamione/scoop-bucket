@@ -1,10 +1,10 @@
 {
-  "version": "1.1.20",
+  "version": "1.1.24",
   "description": "A Git client based on the IntelliJ platform",
   "homepage": "https://github.com/DetachHead/rebased",
   "license": "Apache-2.0",
-  "url": "https://github.com/DetachHead/rebased/releases/download/1.1.20/rebased.exe",
-  "hash": "35f6544da7ef44151f3a9a1f0dfa0283ae94e5c65004b56c33e1baa31e44285d",
+  "url": "https://github.com/DetachHead/rebased/releases/download/1.1.24/rebased.exe",
+  "hash": "18d7611d05536486ae9574bb3ed13f80a18b783d5c33e7ccf8cbd2dc7f5c7cbf",
   "installer": {
     "args": [
       "/S"
