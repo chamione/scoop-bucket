@@ -1,16 +1,19 @@
 {
-  "version": "0.1.8",
+  "version": "0.2.2",
   "description": "A desktop workbench for running Claude in an isolated virtual machine",
   "homepage": "https://github.com/Lee-xeo/Claude-Cage",
   "license": "MIT",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/Lee-xeo/Claude-Cage/releases/download/v0.1.8/Cage-0.1.8-windows-amd64-setup.exe",
-      "hash": "4b069b1e82e5d0ed0fd5a718222428679cf392b2b5f3e7e1a8efddc30634f0c4"
+      "url": "https://github.com/Lee-xeo/Claude-Cage/releases/download/v0.2.2/Cage-0.2.2-windows-amd64-setup.exe",
+      "hash": "9a767ce6e8d020257c3c53bf149de2a613dc0327601a5920859e43d15c1a54ff"
     }
   },
   "installer": {
-    "args": ["/S", "/D=$dir\\app"]
+    "args": [
+      "/S",
+      "/D=$dir\\app"
+    ]
   },
   "uninstaller": {
     "script": [
